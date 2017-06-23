@@ -3,102 +3,100 @@
 # tournament.py -- implementation of a Swiss-system tournament
 #
 # This content id produced by David Duckwitz
-# (c) 2017 by David Duckwitz (Project for Nanodegree - Udacity - FULLStack Webdeveloper)
+# (c) 2017 by David Duckwitz (Project for Nanodegree - Udacity)
 # You can take this for getting ideas, but please create your own script
 
 import time
 import psycopg2
 from random import shuffle
 
-def connect():
-    #Connect to Database
-    return psycopg2.connect("dbname=tournament")
+def connect():    
+    try:
+        db = psycopg2.connect("dbname='tournament' user='postgres' password='postgres'")
+	c = db.cursor()
+	return db, c
+    except:
+	print "Unable to connect to database"		
 
-def deleteMatches():
-    #Connect to Database
-    db = connect()
-    c = db.cursor()
-    #Delete from Database
-    c.execute("DELETE FROM matches")
-    db.commit()
-    #Close DB Connection
+def deleteMatches():    
+    db, c = connect()    
+    c.execute("DELETE FROM matches;")
+    db.commit()   
     db.close()
 
 def deletePlayers():
-    deleteTournamentPlayers()
-    #Connect to Database
-    db = connect()
-    c = db.cursor()
-    #Delete from Database
+    db, c = connect()
     c.execute("DELETE FROM players;")
     db.commit()
-    #Close DB Connection
     db.close()
 
-def countPlayers():
-    #Connect to Database
-    db = connect()
-    c = db.cursor()
-    #run Database Query
+def deleteTournaments():    
+    db, c = connect()
+    c.execute("DELETE FROM tournaments;")
+    db.commit()    
+    db.close()
+
+def countPlayers():    
+    db, c = connect()
     c.execute("SELECT count(*) from players;")
-    rows = c.fetchall()
-    #Close DB Connection
+    rows = c.fetchall()    
     db.close()
-
     return int(rows[0][0])
 
-def registerPlayer(name, tournamentID = 1):
-    #Connect to Database
-    db = connect()
-    c = db.cursor()
-    #run Database Query
+def createTournament(name, tournamentID = None):    
+    db, c = connect()    
+    if tournamentID is None:
+        c.execute("INSERT INTO tournaments VALUES (DEFAULT, %s);", (name, ))
+    else:
+        c.execute("INSERT INTO tournaments VALUES (DEFAULT, %s, %s);", (tournamentID, name))
+    db.commit()    
+    db.close()
+
+def registerPlayer(name):    
+    db, c = connect()   
     c.execute("INSERT INTO players VALUES (DEFAULT, %s);", (name, ))
-    db.commit()
-    #Close DB Connection
+    db.commit()    
     db.close()
 
-def playerStandings(tournamentID = 1):
-    #Connect to Database
-    db = connect()
-    c = db.cursor()
-    #run Database Query
-    c.execute("SELECT * FROM player_stats WHERE TournamentID = %s" , (tournamentID, ))
-    rows = c.fetchall()
-    #Close DB Connection
+def playerStandings(tournamentID = 1):    
+    db, c = connect()
+    c.execute("SELECT PlayerID, PlayerName, Wins, Matches FROM Standings order by Wins asc")
+    rows = c.fetchall()    
     db.close()
-
     l = list()
-
-    for row in rows:
-        l.append((int(row[0]), row[1], int(row[2]), int(row[3])))
-
+    i=0
+    while i < len(rows):
+        l.append((int(rows[i][0]), rows[i][1], int(rows[i][2]), int(rows[i][3])))
+        i=i+1
     return l
 
-def reportMatch(firstPlayer, secondPlayer, winner, tournamentID = 1):
-    #Connect to Database
-    db = connect()
-    c = db.cursor()
-    #run Database Query
-    c.execute("INSERT INTO matches VALUES (DEFAULT, %s, %s, %s, %s);", (tournamentID, firstPlayer, secondPlayer, winner))
-    db.commit()
-    #Close DB Connection
+def reportMatch(winner, loser, draw, tournamentID = 1):    
+    db, c = connect()
+    if draw:
+        c.execute("INSERT INTO Matches VALUES (DEFAULT, 1, %s,%s,%s)",(winner,loser,winner))
+        c.execute("INSERT INTO Matches VALUES (DEFAULT, 1, %s,%s,&s)",(loser,winner,winner))
+    else:
+        c.execute("INSERT INTO Matches VALUES (DEFAULT, 1, %s,%s,%s)",(winner,loser,winner))
+        c.execute("INSERT INTO Matches VALUES (DEFAULT, 1, %s,%s,%s)",(loser,winner,0))    
+    db.commit()    
     db.close()
 
-def swissPairings(tournamentID = 1):
-    db = connect()
-    c = db.cursor()
-    c.execute("SELECT * FROM player_stats ORDER BY wins DESC;")
+def swissPairings():    
+    db, c = connect()
+    c.execute("SELECT * FROM Standings ORDER BY wins DESC;")
     rows = c.fetchall()
     db.close()
     i=0
-    pairs = []
-    while i < len(rows):
-        playerOneId = rows[i][0]
-        playerOneName = rows[i][1]
-        playerTwoId = rows[i+1][0]
-        playerTwoName = rows[i+1][1]
-        pairs.append((playerOneId,playerOneName,playerTwoId,playerTwoName))
-        i=i+2
-
-	return pairs
-	
+    standings = playerStandings()
+    num = int(countPlayers())
+    pairings = []
+    if (num > 0): 
+        for i in range (num):
+            if (i % 2 == 0):
+                id1 = standings[i][0]
+                name1 = standings[i][1]
+                id2 = standings[i + 1][0]
+                name2 = standings[i + 1][1]
+                pair = (id1, name1, id2, name2)
+                pairings.append(pair)
+	return pairings
